@@ -197,7 +197,7 @@ export default function App() {
       <div className="bg-gradient-to-r from-orange-400 to-amber-400 text-white px-4 pt-10 pb-4 flex-shrink-0">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-xl font-bold">🍜 附近吃什么</h1>
+            <h1 className="text-xl font-bold">🍜 今天吃什么</h1>
             <p className="text-xs opacity-80 mt-0.5">帮你找附近的店</p>
           </div>
         </div>
