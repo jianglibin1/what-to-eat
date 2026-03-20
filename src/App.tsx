@@ -3,9 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 // ============================================================
 // 高德地图 API Key（用户可自行替换）
 // 申请地址：https://lbs.amap.com/
-// 免费额度：每天 5000 次调用
 // ============================================================
-const AMAP_KEY = '0e5ae49f5ee73a959a80ef4da21ef06c' // 示例Key，请替换为你的
 const AMAP_KEY_INPUT_KEY = 'amap_user_key'
 
 // 搜索类型
@@ -47,22 +45,22 @@ export default function App() {
   const [hasLocation, setHasLocation] = useState(false)
   const [locationInfo, setLocationInfo] = useState<{ lat: number; lng: number } | null>(null)
   const [userKey, setUserKey] = useState('')
-  const [showKeyModal, setShowKeyModal] = useState(false)
   const [decideResult, setDecideResult] = useState<Restaurant | null>(null)
   const [isRolling, setIsRolling] = useState(false)
   const [showResult, setShowResult] = useState(false)
   const [copied, setCopied] = useState('')
   const [savedList, setSavedList] = useState<Restaurant[]>([])
   const [filterDistance, setFilterDistance] = useState('0')
+  const [showApiAlert, setShowApiAlert] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // 加载保存的Key
   useEffect(() => {
     const saved = localStorage.getItem(AMAP_KEY_INPUT_KEY)
     if (saved) setUserKey(saved)
+    const savedR = JSON.parse(localStorage.getItem('saved_restaurants') || '[]')
+    setSavedList(savedR)
   }, [])
 
-  // 获取定位
   const getLocation = () => {
     if (!navigator.geolocation) {
       setError('浏览器不支持定位')
@@ -77,28 +75,28 @@ export default function App() {
         setLocationInfo({ lat, lng })
         setHasLocation(true)
         setLoading(false)
-        // 立即搜索附近商家
         searchNearby(lat, lng, '', '')
       },
-      (err) => {
-        setError('定位失败，请开启位置权限')
-        setLoading(false)
-        // 用默认地址试一下
+      () => {
         const defaultLng = 120.1551
         const defaultLat = 30.2741
         setLocationInfo({ lat: defaultLat, lng: defaultLng })
         setHasLocation(true)
+        setLoading(false)
         searchNearby(defaultLat, defaultLng, '', '')
       }
     )
   }
 
-  // 搜索附近商家
+  const getKey = () => userKey || localStorage.getItem(AMAP_KEY_INPUT_KEY) || ''
+
   const searchNearby = (lat: number, lng: number, kw: string, type: string) => {
-    const key = userKey || AMAP_KEY
-    if (!key || key === '0e5ae49f5ee73a959a80ef4da21ef06c') {
-      setError('请先填写高德API Key（点击右上角设置）')
+    const key = getKey()
+    if (!key) {
+      setShowApiAlert(true)
       setResults([])
+      setError('请先设置高德API Key')
+      setLoading(false)
       return
     }
     setLoading(true)
@@ -135,11 +133,11 @@ export default function App() {
           tel: p.tel,
         }))
         setResults(pois)
-        if (pois.length === 0) setError('附近没有找到商家，试试扩大范围')
+        if (pois.length === 0) setError('附近没有找到商家，试试扩大范围或换个位置')
       })
       .catch(() => {
         setLoading(false)
-        setError('网络请求失败')
+        setError('网络请求失败，请检查网络')
       })
   }
 
@@ -154,13 +152,10 @@ export default function App() {
     searchNearby(locationInfo.lat, locationInfo.lng, keyword, cuisineType)
   }
 
-  const saveKey = () => {
-    if (userKey.trim()) {
-      localStorage.setItem(AMAP_KEY_INPUT_KEY, userKey.trim())
-      setShowKeyModal(false)
-      if (hasLocation && locationInfo) {
-        searchNearby(locationInfo.lat, locationInfo.lng, keyword, cuisineType)
-      }
+  const saveKey = (k: string) => {
+    if (k.trim()) {
+      localStorage.setItem(AMAP_KEY_INPUT_KEY, k.trim())
+      setUserKey(k.trim())
     }
   }
 
@@ -183,11 +178,6 @@ export default function App() {
       setSavedList(updated)
     }
   }
-
-  useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem('saved_restaurants') || '[]')
-    setSavedList(saved)
-  }, [])
 
   const decide = () => {
     if (filteredResults.length === 0) return
@@ -225,9 +215,30 @@ export default function App() {
     return 'text-red-500'
   }
 
+  const [tempKey, setTempKey] = useState(getKey())
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-50 max-w-md mx-auto relative">
       <div className="flex flex-col min-h-screen bg-white relative overflow-hidden shadow-2xl">
+
+        {/* API Key 提示横幅 */}
+        {!getKey() && (
+          <div className="bg-orange-400 text-white px-4 py-3 flex items-center justify-between flex-shrink-0">
+            <div className="flex items-center gap-2 flex-1">
+              <span className="text-lg">🔑</span>
+              <span className="text-sm font-medium flex-1">需要API Key才能搜索附近商家</span>
+            </div>
+            <button
+              onClick={() => {
+                setTempKey(getKey())
+                setShowApiAlert(true)
+              }}
+              className="bg-white text-orange-400 text-xs font-bold px-3 py-1.5 rounded-full flex-shrink-0"
+            >
+              去设置
+            </button>
+          </div>
+        )}
 
         {/* 顶部 */}
         <div className="bg-gradient-to-r from-orange-400 to-amber-400 text-white px-4 py-4 flex-shrink-0">
@@ -237,10 +248,10 @@ export default function App() {
               <p className="text-xs opacity-80 mt-0.5">帮你找附近的店</p>
             </div>
             <button
-              onClick={() => setShowKeyModal(true)}
-              className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-full transition-colors"
+              onClick={() => { setTempKey(getKey()); setShowApiAlert(true) }}
+              className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-full transition-colors flex items-center gap-1"
             >
-              ⚙️ API设置
+              ⚙️ <span className="hidden sm:inline">API</span>
             </button>
           </div>
 
@@ -294,7 +305,6 @@ export default function App() {
 
         {/* 内容 */}
         <div className="flex-1 overflow-y-auto pb-20">
-          {/* 定位状态 */}
           {!hasLocation && !loading && (
             <div className="p-4 text-center">
               <div className="text-5xl mb-3">📍</div>
@@ -318,10 +328,13 @@ export default function App() {
 
           {error && !loading && (
             <div className="p-4 text-center">
-              <div className="text-4xl mb-2">⚠️</div>
+              <div className="text-4xl mb-2">{error.includes('Key') ? '🔑' : '⚠️'}</div>
               <p className="text-gray-400 text-sm">{error}</p>
               {error.includes('Key') && (
-                <button onClick={() => setShowKeyModal(true)} className="mt-2 text-orange-400 text-sm underline">
+                <button
+                  onClick={() => { setTempKey(getKey()); setShowApiAlert(true) }}
+                  className="mt-3 bg-orange-400 text-white px-6 py-2 rounded-xl text-sm font-medium"
+                >
                   去设置API Key
                 </button>
               )}
@@ -365,16 +378,13 @@ export default function App() {
                         </div>
                         <div className="text-xs text-gray-400 mt-1 truncate">{r.address}</div>
                       </div>
-
-                      <div className="flex flex-col gap-1 items-end flex-shrink-0">
-                        <button
-                          onClick={() => saveToList(r)}
-                          className="text-xs text-gray-400 hover:text-orange-400 transition-colors px-2"
-                          title="收藏"
-                        >
-                          ☆
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => saveToList(r)}
+                        className="text-gray-300 hover:text-orange-400 transition-colors px-2 text-lg flex-shrink-0"
+                        title="收藏"
+                      >
+                        ☆
+                      </button>
                     </div>
 
                     {/* 快捷操作 */}
@@ -423,13 +433,13 @@ export default function App() {
           <div className="absolute inset-0 bg-white z-10 flex flex-col p-4">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-bold text-gray-700">🎲 随机决定</h2>
-              <button onClick={() => setTab('nearby')} className="text-gray-400 text-xl">✕</button>
+              <button onClick={() => setTab('nearby')} className="text-gray-400 text-xl w-8 h-8 flex items-center justify-center">✕</button>
             </div>
             <p className="text-xs text-gray-400 mb-3">从当前 {filteredResults.length} 家店中随机选择</p>
 
             {showResult && decideResult && (
               <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl p-5 text-center mb-4 animate-result">
-                <div className="text-5xl mb-2">{(decideResult as any).emoji || '🍱'}</div>
+                <div className="text-5xl mb-2">🍱</div>
                 <div className="text-xl font-bold text-gray-800">{decideResult.name}</div>
                 <div className="flex justify-center gap-3 mt-2">
                   <span className="text-xs text-orange-400 bg-orange-100 px-2 py-0.5 rounded-full">{decideResult.type}</span>
@@ -466,7 +476,7 @@ export default function App() {
           <div className="absolute inset-0 bg-white z-10 flex flex-col">
             <div className="flex items-center justify-between px-4 py-4 border-b border-gray-100">
               <h2 className="text-base font-bold text-gray-700">⭐ 我的收藏</h2>
-              <button onClick={() => setTab('nearby')} className="text-gray-400 text-xl">✕</button>
+              <button onClick={() => setTab('nearby')} className="text-gray-400 text-xl w-8 h-8 flex items-center justify-center">✕</button>
             </div>
             <div className="flex-1 overflow-y-auto p-3">
               {savedList.length === 0 ? (
@@ -500,26 +510,31 @@ export default function App() {
           </div>
         )}
 
-        {/* API Key 设置弹窗 */}
-        {showKeyModal && (
-          <div className="absolute inset-0 bg-black/40 z-50 flex items-end">
-            <div className="bg-white w-full rounded-t-3xl p-5 animate-slideUp">
-              <div className="w-12 h-1 bg-gray-200 rounded-full mx-auto mb-4" />
-              <h3 className="text-base font-bold text-gray-800 mb-1">⚙️ 高德地图 API Key</h3>
+        {/* API Key 设置弹窗 - 固定居中显示 */}
+        {showApiAlert && (
+          <div className="absolute inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setShowApiAlert(false)}>
+            <div className="bg-white w-full max-w-sm rounded-2xl p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-base font-bold text-gray-800">🔑 高德地图 API Key</h3>
+                <button onClick={() => setShowApiAlert(false)} className="text-gray-400 text-lg w-7 h-7 flex items-center justify-center">✕</button>
+              </div>
               <p className="text-xs text-gray-400 mb-4">
                 申请地址：<a href="https://lbs.amap.com/" target="_blank" className="text-orange-400 underline">lbs.amap.com</a>
                 <br />免费额度：每天5000次，个人用绑绑够
               </p>
               <input
-                value={userKey}
-                onChange={e => setUserKey(e.target.value)}
+                value={tempKey}
+                onChange={e => setTempKey(e.target.value)}
                 placeholder="请输入高德 API Key"
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-orange-300"
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-orange-300 mb-3"
               />
-              <div className="flex gap-2 mt-3">
-                <button onClick={() => setShowKeyModal(false)} className="flex-1 py-2.5 rounded-xl text-gray-400 text-sm">取消</button>
-                <button onClick={saveKey} className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-orange-400 to-amber-400 text-white text-sm font-semibold">
-                  保存并搜索
+              {getKey() && (
+                <p className="text-xs text-green-400 mb-3">✅ 当前已设置Key</p>
+              )}
+              <div className="flex gap-2">
+                <button onClick={() => setShowApiAlert(false)} className="flex-1 py-2.5 rounded-xl text-gray-400 text-sm">取消</button>
+                <button onClick={() => { saveKey(tempKey); setShowApiAlert(false); if (hasLocation && locationInfo) searchNearby(locationInfo.lat, locationInfo.lng, keyword, cuisineType) }} className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-orange-400 to-amber-400 text-white text-sm font-semibold">
+                  保存
                 </button>
               </div>
             </div>
@@ -533,11 +548,6 @@ export default function App() {
           100% { transform: scale(1); opacity: 1; }
         }
         .animate-result { animation: resultPop 0.4s ease-out; }
-        @keyframes slideUp {
-          from { transform: translateY(100%); }
-          to { transform: translateY(0); }
-        }
-        .animate-slideUp { animation: slideUp 0.3s ease-out; }
       `}</style>
     </div>
   )
