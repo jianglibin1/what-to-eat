@@ -47,5 +47,9 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>我们需要获取您的位置来搜索附近的餐厅商家</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>我们需要获取您的位置来搜索附近的餐厅商家</string>
 </dict>
 </plist>
